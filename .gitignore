@@ -1,0 +1,5 @@
+# don't track whatever is in the data folder, although code from the project may access it
+data/*
+
+# don't track local ipynb stuff
+*ipynb_checkpoint*
