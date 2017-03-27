@@ -1,3 +1,7 @@
+<script type="text/javascript" async
+  src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
+</script>
+
 # A repo for a small (py)opencl project
 
 I will be implementing stochastic gradient descent for logistic regression using OpenCL.
