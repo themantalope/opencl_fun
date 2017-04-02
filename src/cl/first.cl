@@ -8,7 +8,7 @@ __kernel void access2darray(__global float * array, __global float * out, const 
 {
 
   __global float * row = &array[row_to_access * ncols]; //gets the starting position of the row
-  for(int i=0; i < nrows; i++){
+  for(int i=0; i < ncols; i++){
     out[i] = row[i];
   }
 
