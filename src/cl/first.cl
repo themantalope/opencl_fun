@@ -1,5 +1,23 @@
-__kernel void first(__global int* num1, __global int* num2,__global int* out)
+__kernel void first(__global int* num1, __global int* num2, __global int* out)
 {
     int i = get_global_id(0);
     out[i] = num1[i]*num1[i]+ num2[i]*num2[i];
+}
+
+__kernel void access2darray(__global float * array, __global float * out, const int row_to_access, const int nrows, const int ncols)
+{
+  int gr = get_global_id(0);
+
+
+  if(gr == row_to_access){
+
+  }
+
+  __global float * row = &array[row_to_access * nrows]; //gets the starting position of the row
+  for(int i=0; i < ncols; i++){
+    out[i] = row[i];
+  }
+
+
+
 }
