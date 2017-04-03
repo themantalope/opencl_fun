@@ -1,9 +1,10 @@
-#include <math.h>
+// #include <math.h>
 
-float dot(float * a, float * b, int size){
-  float out = 0.0
+float dotproduct(__global float * a, __global float * b, int size)
+{
+  float out = 0.0;
 
-  for (i = 0; i<size; i++){
+  for (int i = 0; i<size; i++){
     out += a[i] * b[i];
   }
 
@@ -12,16 +13,43 @@ float dot(float * a, float * b, int size){
 }
 
 
-float ols_cost(float * x, float * theta, float y int xsize){
+float ols_cost_loc(__global float * x, __global float * theta, float y, int xsize)
+{
   // cost = \sum (x * theta - y)**2
 
-  float estimate = dot(x, theta);
+  float estimate = dotproduct(x, theta, xsize);
   float cost = powf(estimate - y, 2.0);
+
+  return cost;
+}
+
+float compute_avg(float * vector, int size)
+{
+  float sum = 0.0;
+  for(int i = 0; i < size; i++){
+    sum += vector[i];
+  }
+
+  float avg = sum;
+  return avg;
 }
 
 
 
+__kernel void ols_cost(__global float * X, __global float * theta, __global float * y, __global float * cost, const int nrows, const int ncols)
+{
+  // here we are taking X to be a 2 dimensional array, tranlated from a row-majored indexed array
+  // theta is a 1 dimensional vector and we are doing matrix multiplication, X * theta
+  //
 
-__kernel void ols_cost(__global float * X, __global float * theta, __global float * y, const int nrows, const int ncols){
-  // here we are taking X to be a 1 dimensional array, tranlated from a row-majored indexed array
+  int row_id = get_global_id(0);
+
+  // float scratch_cost[nrows];
+
+  cost[row_id] = ols_cost_loc(&X[row_id * ncols], theta, y[row_id], ncols);
+
+  // float avg_cost = compute_avg(scratch_cost, nrows);
+
+  // cost[0] = avg_cost;
+
 }
