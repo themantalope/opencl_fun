@@ -23,7 +23,7 @@ float ols_cost_loc(__global float * x, __global float * theta, float y, int xsiz
   return cost;
 }
 
-float compute_avg(float * vector, int size)
+float compute_avg(__global float * vector, int size)
 {
   float sum = 0.0;
   for(int i = 0; i < size; i++){
@@ -32,6 +32,14 @@ float compute_avg(float * vector, int size)
 
   float avg = sum;
   return avg;
+}
+
+float compute_sum(__global float * array, int size){
+  float sum = 0.0;
+  for(int i = 0; i < size; i++){
+    sum += array[i];
+  }
+  return sum;
 }
 
 
@@ -43,13 +51,14 @@ __kernel void ols_cost(__global float * X, __global float * theta, __global floa
   //
 
   int row_id = get_global_id(0);
+  __global float * scratch;
 
   // float scratch_cost[nrows];
 
   cost[row_id] = ols_cost_loc(&X[row_id * ncols], theta, y[row_id], ncols);
 
-  // float avg_cost = compute_avg(scratch_cost, nrows);
+  
 
-  // cost[0] = avg_cost;
+
 
 }
