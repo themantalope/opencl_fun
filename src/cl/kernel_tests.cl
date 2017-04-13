@@ -54,7 +54,7 @@ __kernel void test_reduction_avg(__global float * in, __global float * out, __lo
 
 }
 
-__kernel void test_reduction_avg_matrix(__global float * in_mat, __global float * out_vec, __local float * partial_sums, const int nrows, const int ncols)
+inline void matrix_row_avg(__global float * mat, __global float * out, __local float * partial_sums, const int nrows, const int ncols)
 {
   int lid = get_local_id(0);
   int gid = get_global_id(0);
@@ -62,7 +62,7 @@ __kernel void test_reduction_avg_matrix(__global float * in_mat, __global float 
   float nrowsf = (float) nrows;
 
   for(int j = 0; j < ncols; j++){
-    partial_sums[lid*ncols + j] = in_mat[gid*ncols + j];
+    partial_sums[lid*ncols + j] = mat[gid*ncols + j];
   }
 
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -72,11 +72,17 @@ __kernel void test_reduction_avg_matrix(__global float * in_mat, __global float 
         partial_sums[lid*ncols + j] += partial_sums[lid*ncols + i*ncols + j];
       }
     }
+    barrier(CLK_LOCAL_MEM_FENCE);
   }
 
   if(lid == 0){
     for(int j = 0 ; j < ncols; j ++){
-      out_vec[get_group_id(0) + j] = partial_sums[0 + j] / nrowsf;
+      out[get_group_id(0) + j] = partial_sums[0 + j]/nrowsf;
     }
   }
+}
+
+__kernel void test_reduction_avg_matrix(__global float * in_mat, __global float * out_vec, __local float * partial_sums, const int nrows, const int ncols)
+{
+  matrix_row_avg(in_mat, out_vec, partial_sums, nrows, ncols);
 }
