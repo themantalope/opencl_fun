@@ -13,13 +13,13 @@ inline float sigmoid(__global float * X, __global float * theta, int row_id, int
 {
   float linear_sum = 0.0f;
   for(int j = 0; j < ncols; j++){
-    linear_sum += X[row_id*ncols + j] * theta[j];
+    linear_sum += X[row_id + j*ncols] * theta[j];
   }
 
   float exponential = pow(M_E_F, -linear_sum);
   exponential += 1.0f;
   float sig = 1.0f / exponential;
-  return linear_sum;
+  return sig;
 }
 
 __kernel void matrix_row_mean(__global float * in, __global float * out, __local float * scratch, const int nrows, const int ncols)
