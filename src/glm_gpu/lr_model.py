@@ -152,7 +152,7 @@ class LogisticRegressionGPU(object):
             # compute the gradient
             gradient = self._gpu_compute_gradient(X, y, self.theta)
             # update
-            self.theta -= learning_rate * gradient
+            self.theta += learning_rate * gradient
             # wow, such machine learning!
             epoch_count += self.epoch_increment
             loop_count += 1
@@ -226,7 +226,6 @@ class LogisticRegressionGPU(object):
                                          theta_buf,
                                          y_buf,
                                          gradient_buf,
-                                         model_estimate_buf,
                                          nrows,
                                          ncols)
 

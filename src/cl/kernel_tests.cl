@@ -33,8 +33,8 @@ __kernel void test_rowaverage(__global float * in, __global float * out, const i
 __kernel void array_copy(__global float * in, __global float * out, const int nrows, const int ncols)
 {
   int gid = get_global_id(0);
-  for(int j = 0; j < ncols; j++){
-    out[gid*ncols + j] = in[gid*ncols + j];
+  for(int j = 0; j < ncols-1; j++){
+    out[gid*ncols + j] = (float) (gid*ncols + j);
   }
 }
 
