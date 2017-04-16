@@ -13,7 +13,7 @@ inline float sigmoid(__global float * X, __global float * theta, int row_id, int
 {
   float linear_sum = 0.0f;
   for(int j = 0; j < ncols; j++){
-    linear_sum += X[row_id + j*ncols] * theta[j];
+    linear_sum += X[row_id*ncols + j] * theta[j];
   }
 
   float exponential = pow(M_E_F, -linear_sum);
@@ -77,13 +77,12 @@ __kernel void logistic_cost_ols(__global float * X, __global float * theta, __gl
 }
 
 
-__kernel void logistic_gradient_ols(__global float * X, __global float * theta, __global float * y, __global float * gradient, __global float * sig, const int nrows, const int ncols)
+__kernel void logistic_gradient_ols(__global float * X, __global float * theta, __global float * y, __global float * gradient, const int nrows, const int ncols)
 {
   int gid = get_global_id(0);
-  sig[gid] = sigmoid(X, theta, gid, nrows, ncols);
 
   for(int j = 0; j < ncols; j++){
-    gradient[gid*ncols + j] = (y[gid] - sig[gid]) * X[gid*ncols + j];
+    gradient[gid + j*ncols] = (y[gid] - sigmoid(X, theta, gid, nrows, ncols)) * X[gid + j*ncols];
   }
 
 }
