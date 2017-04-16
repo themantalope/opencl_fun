@@ -3,3 +3,8 @@ data/*
 
 # don't track local ipynb stuff
 *ipynb_checkpoint*
+
+# dont' track eggs
+*.egg*
+
+*pycache*

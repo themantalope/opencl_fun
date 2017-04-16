@@ -30,6 +30,14 @@ __kernel void test_rowaverage(__global float * in, __global float * out, const i
 
 }
 
+__kernel void array_copy(__global float * in, __global float * out, const int nrows, const int ncols)
+{
+  int gid = get_global_id(0);
+  for(int j = 0; j < ncols; j++){
+    out[gid*ncols + j] = in[gid*ncols + j];
+  }
+}
+
 
 __kernel void two_stage_reduce(__global float * in, __local float * scratch, __global float * out, __const int size)
 {
@@ -48,9 +56,7 @@ __kernel void two_stage_reduce(__global float * in, __local float * scratch, __g
   barrier(CLK_LOCAL_MEM_FENCE);
   for(int i = get_local_size(0) / 2; i > 0; i >>= 1){
     if(lid < i){
-      float other = scratch[lid + i];
-      float mine = scratch[lid];
-      scratch[lid] = other + mine;
+      scratch[lid] += scratch[lid + i];
     }
     barrier(CLK_LOCAL_MEM_FENCE);
   }
@@ -59,19 +65,50 @@ __kernel void two_stage_reduce(__global float * in, __local float * scratch, __g
     out[get_group_id(0)] = scratch[0];
   }
 
-  barrier(CLK_GLOBAL_MEM_FENCE);
-
-  int n_groups = get_num_groups(0);
-  if(gid == 0){
-    float accum = 0.0;
-    for(int i = 0; i < n_groups; i++){
-      accum += out[i];
-    }
-    out[0] = accum;
-  }
 }
 
+inline float mydot(__global float * a, __global float * b, const int size)
+{
+  float out = 0.0f;
+  for(int i = 0; i < size; i++){
+    out += a[i] * b[i];
+  }
+  return out;
+}
 
+inline float dotproduct(__global float * a, __global float * b, const int size)
+{
+  float out = 0.0f;
+  for(int i = 0; i < size; i++){
+    out += a[i] * b[i];
+  }
+  return out;
+}
+
+inline float sigmoid(__global float * X, __global float * theta, const int size)
+{
+  float linear_sum = dotproduct(X, theta, size);
+  float exponential = pow(M_E_F, -linear_sum);
+  float sig = pow(1.0f + exponential, -1.0f);
+  return sig;
+}
+
+__kernel void sig(__global float * X, __global float * theta, __global float * out, const int nrows, const int ncols)
+{
+  int gid = get_global_id(0);
+  out[gid] = sigmoid(&X[gid*ncols], theta, ncols);
+}
+
+__kernel void test_dot2(__global float * a, __global float * b, __global float * out, const int size)
+{
+  *out = mydot(a, b, size);
+}
+
+__kernel void powtest(__global float * a, __global float * b, __global float * out)
+{
+  int gid = get_global_id(0);
+  out[gid] = pow(a[gid], b[gid]);
+}
 
 __kernel void test_reduction_avg_global(__global float * in, __global float * out, __global float * partial_sums, const int nrows)
 {
@@ -98,6 +135,7 @@ __kernel void test_reduction_avg_global(__global float * in, __global float * ou
 
 
 }
+
 
 __kernel void test_reduction_avg(__global float * in, __global float * out, __local float * partial_sums, const int nrows)
 {
