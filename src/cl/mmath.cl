@@ -109,8 +109,6 @@ __kernel void SPGMM(const int M,
   // thread identifiers
   const int tidm = get_local_id(0);
   const int tidn = get_local_id(1);
-  const int gid_0 = get_global_id(0);
-  const int gid_1 = get_global_id(1);
   const int offsetM = get_group_id(0) * TSM;
   const int offsetN = get_group_id(1) * TSN;
 
@@ -137,24 +135,16 @@ __kernel void SPGMM(const int M,
   for(int t = 0; t < nTiles; t++){
     // load a tile of A and B into local mem
     #pragma unroll
-    for(int c = 0; c < TSK; c++){
+    for(int wm = 0; wm < WPTM; wm++){
+      int r = tidm + RTSM*wm;
+
       #pragma unroll
-      for(int wm = 0; wm < WPTM; wm++){
-        int r = tidm + RTSM*wm;
+      for(int c = 0; c < TSK; c++){
         Asub[r][c] = A[(offsetM + r)*K + TSK*t + c];
         Bsub[r][c] = B[(offsetN + r)*K + TSK*t + c];
       }
+
     }
-
-
-    // #pragma unroll
-    // for(int r = 0; r < TSM; r++){
-    //   #pragma unroll
-    //   for(int c = 0; c < TSK; c++){
-    //     Asub[r][c] = A[(offsetM + r)*K + TSK*t + c];
-    //     Bsub[r][c] = B[(offsetN + r)*K + TSK*t + c];
-    //   }
-    // }
 
     barrier(CLK_LOCAL_MEM_FENCE);
     // loop over values in a single tile
@@ -194,5 +184,193 @@ __kernel void SPGMM(const int M,
   }
 
 }
+
+#define BLOCK_SIZE 16
+#define ACCUMULATION_ELEMENTS (BLOCK_SIZE*BLOCK_SIZE)
+#define ELEMENTS_SHARED 16
+
+__kernel void SPGMM2(const int M,
+                     const int N,
+                     const int K,
+                     const __global float * A,
+                     const __global float * B,
+                     __global float * C)
+{
+  const int local_m = get_local_id(0);
+  const int local_n = get_local_id(1);
+  const int global_m = get_global_id(0);
+  const int global_n = get_global_id(1);
+
+  __local float Asub[BLOCK_SIZE][ELEMENTS_SHARED];
+  __local float Bsub[BLOCK_SIZE][ELEMENTS_SHARED];
+
+  float Areg[ELEMENTS_SHARED];
+  float Breg;
+  float accum[BLOCK_SIZE][BLOCK_SIZE];
+
+  // initalize the accumlation array
+  #pragma unroll
+  for(int row = 0; row < BLOCK_SIZE; row++){
+    #pragma unroll
+    for(int col = 0; col < BLOCK_SIZE; col++){
+      accum[row][col] = 0.0f;
+    }
+  }
+
+  const int n_tiles = K / ELEMENTS_SHARED;
+  for(int t = 0; t < n_tiles; t++){
+    // load the submatricies
+    #pragma unroll
+    for(int row = 0; row < BLOCK_SIZE; row++){
+      #pragma unroll
+      for(int col = 0; col < ELEMENTS_SHARED; col++){
+        Asub[row][col] = A[(global_m + local_m + row)*K + t*ELEMENTS_SHARED + col];
+        Bsub[row][col] = B[(global_n + local_n + row)*K + t*ELEMENTS_SHARED + col];
+      }
+    }
+
+
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    // do the computation
+
+    // load a row of A intro the register
+    // #pragma unroll
+    // for(int col = 0; col < ELEMENTS_SHARED; col++){
+    //   Areg[col] = Asub[local_m][col];
+    // }
+
+    // get the accumulation
+    // #pragma unroll
+    // for(int col = 0; col < ELEMENTS_SHARED; col++){
+    //   Breg = Bsub[local_n][col];
+    //   accum[local_m][local_n] += Areg[col] * Breg;
+    // }
+
+    for(int a_row = 0; a_row < BLOCK_SIZE; a_row++){
+      // load a row of A into the register
+      #pragma unroll
+      for(int col = 0; col < ELEMENTS_SHARED; col++){
+        Areg[col] = Asub[a_row][col];
+      }
+
+      #pragma unroll
+      for(int b_row = 0; b_row < BLOCK_SIZE; b_row++){
+        #pragma unroll
+        for(int col = 0; col < ELEMENTS_SHARED; col++){
+          Breg = Bsub[b_row][col];
+          accum[a_row][b_row] += Breg * Areg[col];
+        }
+      }
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+  }
+
+  // write the output to C
+  for(int row = 0; row < BLOCK_SIZE; row++){
+    for(int col = 0; col < BLOCK_SIZE; col++){
+      C[(global_m + local_m + row)*N + global_n + local_n + col] = accum[row][col];
+    }
+  }
+
+
+}
+
+
+/* Matrix multiplication: C = A * B.
+ * Device code.
+ * from: http://gpgpu-computing4.blogspot.com/2009/10/matrix-multiplication-3-opencl.html
+ */
+
+// Thread block size
+#define BLOCK_SIZE 16
+
+//////////////////////////////////////////////////////
+//! Matrix multiplication on the device: C = A * B
+//! wA is A's width and wB is B's width
+//////////////////////////////////////////////////////
+__kernel void
+matrixMul(__global float* C,
+          __global float* A,
+          __global float* B,
+          int wA,
+          int wB)
+{
+    // Block index
+    int bx = get_group_id(0);
+    int by = get_group_id(1);
+
+    // Thread index
+    int tx = get_local_id(0);
+    int ty = get_local_id(1);
+
+    // Index of the first sub-matrix of A processed
+    // by the block
+    int aBegin = wA * BLOCK_SIZE * by;
+
+    // Index of the last sub-matrix of A processed
+    // by the block
+    int aEnd   = aBegin + wA - 1;
+
+    // Step size used to iterate through the
+    // sub-matrices of A
+    int aStep  = BLOCK_SIZE;
+
+    // Index of the first sub-matrix of B processed
+    // by the block
+    int bBegin = BLOCK_SIZE * bx;
+
+    // Step size used to iterate through the
+    // sub-matrices of B
+    int bStep  = BLOCK_SIZE * wB;
+
+    // Loop over all the sub-matrices of A and B
+    // required to compute the block sub-matrix
+    float Csub = 0.0f;
+    for (int a = aBegin, b = bBegin;
+             a <= aEnd;
+             a += aStep, b += bStep)
+    {
+
+        // Declaration of the local memory array As
+        // used to store the sub-matrix of A
+        __local float As[BLOCK_SIZE][BLOCK_SIZE];
+
+        // Declaration of the local memory array Bs
+        // used to store the sub-matrix of B
+        __local float Bs[BLOCK_SIZE][BLOCK_SIZE];
+
+        // Load the matrices from global memory
+        // to local memory; each thread loads
+        // one element of each matrix
+        As[ty][tx] = A[a + wA * ty + tx];
+        Bs[ty][tx] = B[b + wB * ty + tx];
+
+        // Synchronize to make sure the matrices
+        // are loaded
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        // Multiply the two matrices together;
+        // each thread computes one element
+        // of the block sub-matrix
+        for (int k = 0; k < BLOCK_SIZE; ++k){
+          Csub += As[ty][k] * Bs[k][tx];
+        }
+
+
+        // Synchronize to make sure that the preceding
+        // computation is done before loading two new
+        // sub-matrices of A and B in the next iteration
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+    }
+
+    // Write the block sub-matrix to device memory;
+    // each thread writes one element
+    int c = wB * BLOCK_SIZE * by + BLOCK_SIZE * bx;
+    C[c + wB * ty + tx] = Csub;
+
+}
+
 
 __kernel void SPMVM(){}
